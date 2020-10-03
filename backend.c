@@ -206,6 +206,7 @@ int main(int argc, char **argv) {
     int alive_client=0;
     int rval;
     int status;
+    int stop =0;
     int count =0;
     validateArgs(argv);
     rpc_t *rpc = RPC_Init(argv[1],atoi(argv[2]));
@@ -225,32 +226,34 @@ A:  accept_connection(rpc->sockfd, &rpc->clientfd);
     
     while (1) {
         sleep(1);
-        for (int i=0; i< 10; i++){
-            printf("pid: %d\n",pids[i]);
-            if(pids[i] != 0){
-                waitpid(pids[i], &rval, WNOHANG);
-                status = WEXITSTATUS(rval);
-                printf("status %d\n", status);
-                if (status ==1){
-                    pids[i] =0;
-                    alive_client -=1;
-                    if (alive_client <5){
-                        goto A;
+        if (stop ==0){
+            for (int i=0; i< 10; i++){
+                printf("pid: %d\n",pids[i]);
+                if(pids[i] != 0){
+                    waitpid(pids[i], &rval, WNOHANG);
+                    status = WEXITSTATUS(rval);
+                    printf("status %d\n", status);
+                    if (status ==1){
+                        pids[i] =0;
+                        alive_client -=1;
+                        if (alive_client <5){
+                            goto A;
+                        }
+                    }
+                    else if (status == 10){
+                        stop = 1;
+                        break;
                     }
                 }
-                else if (status == 10){
-                    printf("excute here\n");
-                    for(int j = 0; j <10; j++){
-                        if (pids[j] !=0)
-                            wait(pids[j]);
-                    }
-                    return 0;
+                else if (alive_client <5 && count == alive_client){
+                    goto A;
                 }
             }
-            else if (alive_client <5){
-                goto A;
-            }
-            
+        }
+        else
+            for (int j = 0; j< 10; j++){
+                waitpid(pids[j],NULL,WNOHANG);
+                return 0;
         }
     }
 }
