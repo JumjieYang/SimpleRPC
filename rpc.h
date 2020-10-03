@@ -14,11 +14,10 @@ typedef struct functionNode{
 
 typedef struct rpc_t {
         int sockfd;
-        union {
-            int clientfd;
-            functionNode *fn;
-        };
+        int clientfd;
+        functionNode *fn;
 } rpc_t;
+
 
 rpc_t *RPC_Init(char *host, int port);
 void RPC_Register(rpc_t *r, char *name, void *fn);

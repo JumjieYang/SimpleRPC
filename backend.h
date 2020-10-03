@@ -20,4 +20,5 @@ void registerFunctions(rpc_t *r);
 void validateArgs(char **args);
 
 void handleMessage(rpc_t *r, char *message);
+
 #endif

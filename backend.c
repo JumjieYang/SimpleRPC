@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <time.h>
 #include "rpc.h"
 #include "a1_lib.h"
@@ -22,14 +23,8 @@ float divideFloats(float a, float b){
     return a / b;
 }
 
-int sleep(int x){
-    long start_time = clock();
-    while (1)
-    {
-        if ((int)(clock() - start_time)/ CLOCKS_PER_SEC >= x)
-            return 0;
-    }
-    return 1;
+int sleepServer(int x){
+    return sleep(x);
 }
 
 uint64_t factorial(int x){
@@ -40,7 +35,7 @@ uint64_t factorial(int x){
 
 
 rpc_t *RPC_Init(char *host, int port){
-    int sockfd;
+    int sockfd,clientfd;
     functionNode *fn = (functionNode*) malloc(sizeof(functionNode));
     if (create_server(host,port, &sockfd)<0){
         printf("error happened\n");
@@ -48,6 +43,8 @@ rpc_t *RPC_Init(char *host, int port){
     };
     rpc_t *rpc = (rpc_t *) malloc(sizeof(rpc_t));
     rpc ->sockfd = sockfd;
+    rpc ->clientfd = clientfd;
+    printf("Server listening on port %s:%d\n",host,port);
     return rpc;
 }
 
@@ -67,10 +64,16 @@ void RPC_Register(rpc_t *r, char *name, void *fn){
         current-> next = function_node;
     }
 }
-
-
 void RPC_Close(rpc_t *r){
+    functionNode *temp;
 
+   while (r ->fn != NULL)
+    {
+       temp = r -> fn;
+       r->fn = r->fn->next;
+       free(temp);
+    }
+    free (r);
 }
 
 
@@ -81,12 +84,6 @@ functionNode *findIndex(rpc_t *r, char *command){
             return node;
         node = node ->next;
     }
-
-    // remove "\n" at end
-    int length = strlen(command) - 1;
-    if (*command && command[length] == '\n') 
-        command[length] = '\0';
-
     sprintf(ret,"Error: Command \"%s\" not found",command);
     return NULL;
 }
@@ -95,10 +92,8 @@ void registerFunctions(rpc_t *rpc){
     RPC_Register(rpc, "add",addInts);
     RPC_Register(rpc, "multiply",multiplyInts);
     RPC_Register(rpc, "divide",divideFloats);
-    RPC_Register(rpc, "sleep",sleep);
+    RPC_Register(rpc, "sleep",sleepServer);
     RPC_Register(rpc, "factorial",factorial);
-
-    // RPC_Register(rpc, "quit",RPC_Close);
 }
 
 void validateArgs(char **argv){
@@ -176,26 +171,86 @@ void handleMessage(rpc_t *r, char*msg){
                 sprintf(ret,"%d",p(n1));
             }
         }
-        else if (!strcmp(token, "quit")){
-            node-> data ->callback;
-        }
     }
 }
 
+int serve(rpc_t *rpc) {
+    char message[1024];
+    while(1){
+        memset(message,'\0',sizeof(message));
+        ssize_t byte_count = recv_message(rpc->clientfd,message,1024);
+        if (byte_count <=0)
+            return 1;
+        if (!strcmp(message,"exit")){
+            sprintf(ret, "Bye!");
+            send_message(rpc->clientfd,ret,1024);
+            return 1;
+        }
+        if (!strcmp(message,"quit") ){
+            sprintf(ret, "Bye!");
+            send_message(rpc->clientfd,ret,1024);
+            return 10;
+        }
+        if (!strcmp(message,"shutdown")){
+            sprintf(ret, "Bye!");
+            send_message(rpc->clientfd,ret,1024);
+            return 10;
+        }
+            handleMessage(rpc,message);
+            send_message(rpc->clientfd,ret,1024);
+    }
+}
 int main(int argc, char **argv) { 
-    int clientfd;
+    int pid;
+    int pids[10] = {0};
+    int alive_client=0;
+    int rval;
+    int status;
+    int count =0;
     validateArgs(argv);
     rpc_t *rpc = RPC_Init(argv[1],atoi(argv[2]));
     registerFunctions(rpc);
-    accept_connection(rpc->sockfd,&clientfd);
-    char message[1024];
-    while(1){
-    recv_message(clientfd,message,1024);
-    printf("Client: %s",message);
-    handleMessage(rpc,message);
-    printf("%s\n",ret);
-    send_message(clientfd,ret,1024);
-    memset(message,'\0',sizeof(message));
+
+
+A:  accept_connection(rpc->sockfd, &rpc->clientfd);
+    alive_client +=1;
+    pid = fork();
+    
+    if (pid == 0){
+        return serve(rpc);
+    }else {
+        pids[count] = pid;
+        count +=1;
     }
-    return 0;
+    
+    while (1) {
+        sleep(1);
+        for (int i=0; i< 10; i++){
+            printf("pid: %d\n",pids[i]);
+            if(pids[i] != 0){
+                waitpid(pids[i], &rval, WNOHANG);
+                status = WEXITSTATUS(rval);
+                printf("status %d\n", status);
+                if (status ==1){
+                    pids[i] =0;
+                    alive_client -=1;
+                    if (alive_client <5){
+                        goto A;
+                    }
+                }
+                else if (status == 10){
+                    printf("excute here\n");
+                    for(int j = 0; j <10; j++){
+                        if (pids[j] !=0)
+                            wait(pids[j]);
+                    }
+                    return 0;
+                }
+            }
+            else if (alive_client <5){
+                goto A;
+            }
+            
+        }
     }
+}
