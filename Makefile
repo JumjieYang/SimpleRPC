@@ -5,8 +5,8 @@ CLIENT=frontend
 SERVER=backend
 
 rpc: network.c backend.c frontend.c
-	$(CC) -o $(CLIENT) $(CFLAGS) frontend.c network.c message.c
-	$(CC) -o $(SERVER) $(CFLAGS) backend.c network.c message.c
+	$(CC) -o $(CLIENT) $(CFLAGS) frontend.c network.c
+	$(CC) -o $(SERVER) $(CFLAGS) backend.c network.c
 
 clean:
 	rm -rf $(CLIENT) $(SERVER)
