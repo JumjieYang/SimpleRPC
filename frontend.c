@@ -1,7 +1,7 @@
 #include "rpc.h"
 #include "string.h"
-#include"a1_lib.h"
-
+#include "network.h"
+#include "message.h"
 #define BUFFSIZE 1024
 
 rpc_t *RPC_Connect(char *name, int port){
@@ -13,17 +13,22 @@ rpc_t *RPC_Connect(char *name, int port){
 }
 
 
-void RPC_Call(rpc_t *r, char *statement){
-    char server_msg[BUFFSIZE] = {0};
-    send_message(r->sockfd,statement,strlen(statement));
-    ssize_t byte_count = recv_message(r->sockfd, server_msg, sizeof(server_msg));
+void RPC_Call(rpc_t *r, message_t *msg){
+    char ret[1024];
+    send_message(r->sockfd,(char*)msg,sizeof(*msg));
+    ssize_t byte_count = recv_message(r->sockfd, ret, sizeof(ret));
     if (byte_count <=0){
+        free(r);
+        free(msg);
         exit(1);
     }
-    printf("%s\n",server_msg);
-    if (!strcmp(server_msg,"Bye!")){
+    printf("%s\n",ret);
+    if (!strcmp(ret,"Bye!")){
+        free(r);
+        free(msg);
         exit(0);
     }
+    free(msg);
 }
 
 void RPC_close(rpc_t *r){
@@ -38,11 +43,8 @@ int main(int argc, char **argv){
         memset(statement,NULL,1024);
         printf(">> ");
         fgets(statement,50, stdin);
-        find = strchr(statement, '\n');        
-        if(find)                            
-        *find = '\0'; 
-        RPC_Call(backend,statement);
+        RPC_Call(backend,parsingInput(statement));
     }
-    // RPC_Close(backend);
+    RPC_Close(backend);
     return 0;
 }

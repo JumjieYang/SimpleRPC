@@ -5,8 +5,8 @@ CLIENT=frontend
 SERVER=backend
 
 rpc: a1_lib.c backend.c frontend.c
-	$(CC) -o $(CLIENT) $(CFLAGS) frontend.c a1_lib.c
-	$(CC) -o $(SERVER) $(CFLAGS) backend.c a1_lib.c
+	$(CC) -o $(CLIENT) $(CFLAGS) frontend.c a1_lib.c message.c
+	$(CC) -o $(SERVER) $(CFLAGS) backend.c a1_lib.c	message.c
 
 clean:
 	rm -rf $(CLIENT) $(SERVER)

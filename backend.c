@@ -110,64 +110,49 @@ void validateArgs(char **argv){
     }
 }
 
-void handleMessage(rpc_t *r, char*msg){
+void handleMessage(rpc_t *r, message_t*msg){
     memset(ret,NULL,sizeof(ret));
-    char *token;
-    token = strtok(msg," ");
-    functionNode *node = findIndex(r,token);
+    functionNode *node = findIndex(r,msg->command);
     if (node != NULL){
-        if (!strcmp(token, "add") || !strcmp(token, "multiply") || !strcmp(token, "divide")){
-                if (!strcmp(token, "divide")){
+        if (!strcmp(msg->command, "add") || !strcmp(msg->command, "multiply") || !strcmp(msg->command, "divide")){
+                if (!strcmp(msg->command, "divide")){
                     float (*p)(float,float) = node->data->callback;
                     float f1, f2,result;
-                    token = strtok(NULL," ");
-                    if (token != NULL)
-                        f1 = atof(token);
-                    else
+                    if (strlen(msg->arg1) != 0&& strlen(msg->arg2) !=0){
+                        f1 = atof(msg->arg1);
+                        f2 = atof(msg->arg2);
+                    }
+                    else{
                         sprintf(ret,"Invalid Arguments");
-                    token = strtok(NULL," ");
-                    if (token != NULL)
-                        f2 = atof(token);
-                    else
-                        sprintf(ret,"Invalid Arguments");
+                        return;
+                    }
                     result = p(f1,f2);
                     if (!strlen(ret))          
                     sprintf(ret,"%.6f",result);
-
-                    
                 }
                 else {
                     int (*p)(int,int) = node -> data -> callback;
                     int n1,n2;
-                    token = strtok(NULL," ");
-                    if (token == NULL){
+                    if (strlen(msg->arg1) ==0 || strlen(msg->arg2) == 0){
                         sprintf(ret,"Invalid Arguments");
                         return;
                     }
                     else{
-                        n1 = atoi(token);
-                        token = strtok(NULL," ");
-                        if (token == NULL){
-                            sprintf(ret,"Invalid Arguments");
-                            return;
-                        }
-                        else{
-                            n2 = atoi(token);
+                        n1 = atoi(msg->arg1);
+                        n2 = atoi(msg->arg2);
                             sprintf(ret,"%d",p(n1,n2));
-                        }
                     }
                 }
             }
-        else if(!strcmp(token, "sleep") || !strcmp(token, "factorial")){
+        else if(!strcmp(msg->command, "sleep") || !strcmp(msg->command, "factorial")){
             int (*p) (int) = node -> data->callback; 
             int n1;
-            token =strtok(NULL, " ");
-            if (token == NULL){
+            if (!strlen(msg->arg1)){
                 sprintf(ret,"Invalid Arguments");
                 return;
             }
             else{
-                n1 = atoi(token);
+                n1 = atoi(msg->arg1);
                 sprintf(ret,"%d",p(n1));
             }
         }
@@ -175,30 +160,32 @@ void handleMessage(rpc_t *r, char*msg){
 }
 
 int serve(rpc_t *rpc) {
-    char message[1024];
+    message_t *msg = (message_t*)malloc(sizeof(message_t));
+    const int size = sizeof(message_t);
     while(1){
-        memset(message,'\0',sizeof(message));
-        ssize_t byte_count = recv_message(rpc->clientfd,message,1024);
+        ssize_t byte_count = recv_message(rpc->clientfd,(char*)msg,size);
         if (byte_count <=0)
             return 1;
-        if (!strcmp(message,"exit")){
+        if (!strcmp(msg->command,"exit")){
             sprintf(ret, "Bye!");
-            send_message(rpc->clientfd,ret,1024);
+            send_message(rpc->clientfd,ret,size);
             return 1;
         }
-        if (!strcmp(message,"quit") ){
+        if (!strcmp(msg->command,"quit") ){
             sprintf(ret, "Bye!");
-            send_message(rpc->clientfd,ret,1024);
+            send_message(rpc->clientfd,ret,size);
             return 10;
         }
-        if (!strcmp(message,"shutdown")){
+        if (!strcmp(msg->command,"shutdown")){
             sprintf(ret, "Bye!");
-            send_message(rpc->clientfd,ret,1024);
+            send_message(rpc->clientfd,ret,size);
             return 10;
         }
-            handleMessage(rpc,message);
-            send_message(rpc->clientfd,ret,1024);
+            handleMessage(rpc,msg);
+            printf("%d\n",send_message(rpc->clientfd,ret,1024));
     }
+    memset(msg,NULL,sizeof(message_t));
+
 }
 int main(int argc, char **argv) { 
     int pid;
@@ -212,48 +199,47 @@ int main(int argc, char **argv) {
     rpc_t *rpc = RPC_Init(argv[1],atoi(argv[2]));
     registerFunctions(rpc);
 
-
 A:  accept_connection(rpc->sockfd, &rpc->clientfd);
-    alive_client +=1;
-    pid = fork();
-    
-    if (pid == 0){
-        return serve(rpc);
-    }else {
-        pids[count] = pid;
-        count +=1;
-    }
-    
-    while (1) {
-        sleep(1);
-        if (stop ==0){
-            for (int i=0; i< 10; i++){
-                printf("pid: %d\n",pids[i]);
-                if(pids[i] != 0){
-                    waitpid(pids[i], &rval, WNOHANG);
-                    status = WEXITSTATUS(rval);
-                    printf("status %d\n", status);
-                    if (status ==1){
-                        pids[i] =0;
-                        alive_client -=1;
-                        if (alive_client <5){
-                            goto A;
-                        }
-                    }
-                    else if (status == 10){
-                        stop = 1;
-                        break;
-                    }
-                }
-                else if (alive_client <5 && count == alive_client){
-                    goto A;
-                }
-            }
-        }
-        else
-            for (int j = 0; j< 10; j++){
-                waitpid(pids[j],NULL,WNOHANG);
-                return 0;
-        }
-    }
+   alive_client +=1;
+   pid = fork();
+
+   if (pid == 0){
+       return serve(rpc);
+   }else {
+       pids[count] = pid;
+       count +=1;
+   }
+
+   while (1) {
+       sleep(1);
+       if (stop ==0){
+           for (int i=0; i< 10; i++){
+               printf("pid: %d\n",pids[i]);
+               if(pids[i] != 0){
+                   waitpid(pids[i], &rval, WNOHANG);
+                   status = WEXITSTATUS(rval);
+                   printf("status %d\n", status);
+                   if (status ==1){
+                       pids[i] =0;
+                       alive_client -=1;
+                       if (alive_client <5){
+                           goto A;
+                       }
+                   }
+                   else if (status == 10){
+                       stop = 1;
+                       break;
+                   }
+               }
+               else if (alive_client <5 && count == alive_client){
+                   goto A;
+               }
+           }
+       }
+       else
+           for (int j = 0; j< 10; j++){
+               waitpid(pids[j],NULL,WNOHANG);
+               return 0;
+       }
+   }
 }
