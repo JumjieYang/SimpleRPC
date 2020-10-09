@@ -4,7 +4,7 @@ CFLAGS=-fsanitize=signed-integer-overflow -fsanitize=undefined -g -std=gnu99 -O2
 CLIENT=frontend
 SERVER=backend
 
-rpc: a1_lib.c backend.c frontend.c
+rpc: network.c backend.c frontend.c
 	$(CC) -o $(CLIENT) $(CFLAGS) frontend.c network.c message.c
 	$(CC) -o $(SERVER) $(CFLAGS) backend.c network.c message.c
 
